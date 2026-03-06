@@ -4,13 +4,14 @@ import sys
 import time
 from datetime import datetime, timezone
 import pytz
-from config import USERS
+from config import USERS, CN_USERS
 
 DB_FILE = "tracker.db"
 
 PACIFIC = pytz.timezone("US/Pacific")
 
 LEETCODE_GLOBAL = "https://leetcode.com/graphql"
+LEETCODE_CN = "https://leetcode.cn/graphql"
 
 # ---------------- DB ----------------
 
@@ -41,7 +42,7 @@ def init_db():
 
 # ---------------- LeetCode API ----------------
 
-def get_recent_ac(username):
+def get_recent_ac_global(username):
 
     query = """
     query recentAcSubmissions($username: String!) {
@@ -65,10 +66,7 @@ def get_recent_ac(username):
 
             r = requests.post(
                 LEETCODE_GLOBAL,
-                json={
-                    "query": query,
-                    "variables": {"username": username}
-                },
+                json={"query": query, "variables": {"username": username}},
                 headers=headers,
                 timeout=20
             )
@@ -78,7 +76,10 @@ def get_recent_ac(username):
             if "data" not in data or data["data"] is None:
                 return []
 
-            return data["data"].get("recentAcSubmissionList", [])
+            return [
+                {"title": s["title"], "timestamp": s["timestamp"]}
+                for s in data["data"].get("recentAcSubmissionList", [])
+            ]
 
         except requests.exceptions.RequestException:
 
@@ -86,6 +87,63 @@ def get_recent_ac(username):
             time.sleep(2)
 
     return []
+
+
+def get_recent_ac_cn(username):
+
+    query = """
+    query {
+      recentSubmissions(userSlug: "%s") {
+        id
+        status
+        submitTime
+        question {
+          title
+        }
+      }
+    }
+    """ % username
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://leetcode.cn"
+    }
+
+    for _ in range(3):
+
+        try:
+
+            r = requests.post(
+                LEETCODE_CN,
+                json={"query": query},
+                headers=headers,
+                timeout=20
+            )
+
+            data = r.json()
+
+            if "data" not in data or data["data"] is None:
+                return []
+
+            return [
+                {"title": s["question"]["title"], "timestamp": s["submitTime"]}
+                for s in data["data"].get("recentSubmissions", [])
+                if s["status"] == "A_10"
+            ]
+
+        except requests.exceptions.RequestException:
+
+            print("⚠️ retrying...")
+            time.sleep(2)
+
+    return []
+
+
+def get_recent_ac(username):
+    if username in CN_USERS:
+        return get_recent_ac_cn(username)
+    return get_recent_ac_global(username)
 
 
 # ---------------- 统计当天 ----------------
@@ -133,7 +191,6 @@ def save_problems(username, problems, date_str):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # 先删当天记录避免重复
     cursor.execute("""
         DELETE FROM daily_problems
         WHERE username=? AND date=?
@@ -156,7 +213,6 @@ if __name__ == "__main__":
 
     init_db()
 
-    # 支持补历史
     if len(sys.argv) > 1:
         target_date = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
     else:
