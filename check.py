@@ -36,8 +36,64 @@ def init_db():
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS question_numbers (
+        title TEXT PRIMARY KEY,
+        number TEXT
+    )
+    """)
+
     conn.commit()
     conn.close()
+
+
+# ---------------- 题号缓存 ----------------
+
+def get_question_number(title, title_slug=None):
+    """先查本地缓存，没有再请求 API"""
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT number FROM question_numbers WHERE title = ?", (title,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return row[0]
+
+    # 没有缓存，去 Global API 查
+    if not title_slug:
+        title_slug = title.lower().replace(" ", "-").replace("(", "").replace(")", "").replace(",", "").replace("'", "")
+
+    query = """
+    query getQuestion($titleSlug: String!) {
+      question(titleSlug: $titleSlug) {
+        questionFrontendId
+      }
+    }
+    """
+
+    try:
+        r = requests.post(
+            LEETCODE_GLOBAL,
+            json={"query": query, "variables": {"titleSlug": title_slug}},
+            headers={"Content-Type": "application/json", "Referer": "https://leetcode.com"},
+            timeout=20
+        )
+        data = r.json()
+        number = data["data"]["question"]["questionFrontendId"]
+
+        # 存入缓存
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO question_numbers(title, number) VALUES (?, ?)", (title, number))
+        conn.commit()
+        conn.close()
+
+        return number
+
+    except Exception:
+        return "?"
 
 
 # ---------------- LeetCode API ----------------
@@ -49,6 +105,7 @@ def get_recent_ac_global(username):
       recentAcSubmissionList(username: $username) {
         id
         title
+        titleSlug
         timestamp
       }
     }
@@ -77,7 +134,7 @@ def get_recent_ac_global(username):
                 return []
 
             return [
-                {"title": s["title"], "timestamp": s["timestamp"]}
+                {"title": s["title"], "titleSlug": s["titleSlug"], "timestamp": s["timestamp"]}
                 for s in data["data"].get("recentAcSubmissionList", [])
             ]
 
@@ -99,6 +156,7 @@ def get_recent_ac_cn(username):
         submitTime
         question {
           title
+          questionFrontendId
         }
       }
     }
@@ -126,11 +184,22 @@ def get_recent_ac_cn(username):
             if "data" not in data or data["data"] is None:
                 return []
 
-            return [
-                {"title": s["question"]["title"], "timestamp": s["submitTime"]}
-                for s in data["data"].get("recentSubmissions", [])
-                if s["status"] == "A_10"
-            ]
+            results = []
+            for s in data["data"].get("recentSubmissions", []):
+                if s["status"] == "A_10":
+                    title = s["question"]["title"]
+                    number = s["question"]["questionFrontendId"]
+
+                    # 直接缓存 CN 的题号
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT OR REPLACE INTO question_numbers(title, number) VALUES (?, ?)", (title, number))
+                    conn.commit()
+                    conn.close()
+
+                    results.append({"title": title, "timestamp": s["submitTime"]})
+
+            return results
 
         except requests.exceptions.RequestException:
 
@@ -152,7 +221,7 @@ def check_for_date(username, target_date):
 
     submissions = get_recent_ac(username)
 
-    problems_set = set()
+    problems_dict = {}  # title -> titleSlug
 
     for sub in submissions:
 
@@ -162,12 +231,18 @@ def check_for_date(username, target_date):
         ).astimezone(PACIFIC)
 
         if ts.date() == target_date:
-            problems_set.add(sub["title"])
+            problems_dict[sub["title"]] = sub.get("titleSlug")
 
-    problems = list(problems_set)
-    count = len(problems)
+    # 查题号
+    problems = []
+    for title, title_slug in problems_dict.items():
+        number = get_question_number(title, title_slug)
+        time.sleep(0.5)  # 避免请求太快
+        problems.append(f"{number}. {title}")
 
-    return count, problems
+    problems.sort(key=lambda x: int(x.split(".")[0]) if x.split(".")[0].isdigit() else 9999)
+
+    return len(problems), problems
 
 
 # ---------------- DB 写入 ----------------
