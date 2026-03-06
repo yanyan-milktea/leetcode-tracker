@@ -7,7 +7,7 @@ from config import DISPLAY_NAME, WEBHOOK_URL
 
 # ---------- 配置 ----------
 DB_FILE = "tracker.db"
-MENTION_ALL = False  # True 则自动 @everyone
+MENTION_ALL = True  # True 则自动 @everyone
 
 # ---------- 日期 ----------
 if len(sys.argv) > 1:
