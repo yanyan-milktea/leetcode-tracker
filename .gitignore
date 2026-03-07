@@ -1,5 +1,4 @@
 config.py
-tracker.db
 log.txt
 publish.log
 __pycache__/
