@@ -90,7 +90,6 @@ def get_yesterday_rank():
 
     return rank_map
 
-
 # ---------- streak leader ----------
 def get_streak_leader():
     conn = sqlite3.connect(DB_FILE)
@@ -99,24 +98,26 @@ def get_streak_leader():
     cursor.execute("SELECT DISTINCT username FROM daily_records")
     users = cursor.fetchall()
 
-    best_user = None
     best_streak = 0
+    best_users = []
 
     for (username,) in users:
         s = get_streak(username)
         if s > best_streak:
             best_streak = s
-            best_user = username
+            best_users = [username]
+        elif s == best_streak:
+            best_users.append(username)
 
     conn.close()
-    return best_user, best_streak
+    return best_users, best_streak
 
 # ---------- 构建 Discord Embed ----------
 def build_embed():
     leaderboard, today_problems = get_today_records()
 
     yesterday_rank = get_yesterday_rank()
-    streak_leader, best_streak = get_streak_leader()
+    streak_leaders, best_streak = get_streak_leader()
 
     description = ""
     active_users = 0
@@ -172,11 +173,11 @@ def build_embed():
 
     # ---------- header ----------
     if active_users > 0:
-        leader_name = DISPLAY_NAME.get(streak_leader, streak_leader)
+        leader_names = " & ".join(DISPLAY_NAME.get(u, u) for u in streak_leaders)
 
         description = (
             f"👥 {active_users} people solved problems today\n"
-            f"🔥 Longest streak: {leader_name} ({best_streak}d)\n\n"
+            f"🔥 Longest streak: {leader_names} ({best_streak}d)\n\n"
             + description
         )
     else:
