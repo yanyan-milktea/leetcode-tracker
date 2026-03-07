@@ -57,9 +57,11 @@ def get_streak(username):
     for date_db, solved_count in rows:
         if solved_count > 0:
             streak += 1
+        elif streak == 0:
+            continue  # 跳过最新的0（今天还没写）
         else:
             break
-    return max(streak, 1)  # 第一天天数就是1d
+    return max(streak, 1)
 
 # ---------- 昨日排名 ----------
 def get_yesterday_rank():
