@@ -3,7 +3,12 @@ name: Daily LeetCode Publish
 on:
   schedule:
     - cron: '59 7 * * *'  # 每天 UTC 07:59 = 太平洋时间 23:59 (PST)
-  workflow_dispatch:      # 也可以手动触发
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '补发日期 (YYYY-MM-DD)，不填则用今天'
+        required: false
+        default: ''
 
 jobs:
   publish:
@@ -50,4 +55,9 @@ jobs:
           EOF
 
       - name: Run publish
-        run: python3 publish_embed.py
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python3 publish_embed.py ${{ github.event.inputs.date }}
+          else
+            python3 publish_embed.py
+          fi
