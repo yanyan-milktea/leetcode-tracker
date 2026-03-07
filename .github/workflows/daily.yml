@@ -1,0 +1,53 @@
+name: Daily LeetCode Publish
+
+on:
+  schedule:
+    - cron: '59 7 * * *'  # 每天 UTC 07:59 = 太平洋时间 23:59 (PST)
+  workflow_dispatch:      # 也可以手动触发
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pytz
+
+      - name: Restore tracker.db
+        uses: actions/cache@v3
+        with:
+          path: tracker.db
+          key: tracker-db-${{ github.run_id }}
+          restore-keys: tracker-db-
+
+      - name: Generate config.py
+        env:
+          USERS: ${{ secrets.USERS }}
+          CN_USERS: ${{ secrets.CN_USERS }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          DISPLAY_NAME: ${{ secrets.DISPLAY_NAME }}
+        run: |
+          python3 - <<EOF
+          import os, json
+
+          users = [u.strip() for u in os.environ["USERS"].split(",")]
+          cn_users = {u.strip() for u in os.environ["CN_USERS"].split(",")}
+          webhook_url = os.environ["WEBHOOK_URL"]
+          display_name = json.loads(os.environ["DISPLAY_NAME"])
+
+          with open("config.py", "w") as f:
+              f.write(f"USERS = {users}\n")
+              f.write(f"CN_USERS = {cn_users}\n")
+              f.write(f"WEBHOOK_URL = {repr(webhook_url)}\n")
+              f.write(f"DISPLAY_NAME = {display_name}\n")
+          EOF
+
+      - name: Run publish
+        run: python3 publish_embed.py
