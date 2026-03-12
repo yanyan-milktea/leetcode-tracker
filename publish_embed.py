@@ -3,17 +3,19 @@ import requests
 import sys
 import subprocess
 from datetime import datetime
+import pytz
 from config import DISPLAY_NAME, WEBHOOK_URL
 
 # ---------- 配置 ----------
 DB_FILE = "tracker.db"
 MENTION_ALL = True  # True 则自动 @everyone
+PACIFIC = pytz.timezone("US/Pacific")
 
 # ---------- 日期 ----------
 if len(sys.argv) > 1:
     target_date = datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
 else:
-    target_date = datetime.now().date()
+    target_date = datetime.now(PACIFIC).date()
 
 date_str = target_date.isoformat()
 
