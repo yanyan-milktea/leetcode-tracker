@@ -1,8 +1,9 @@
 name: Daily LeetCode Publish
 
 on:
-  schedule:
-    - cron: '59 6 * * *'  # 每天 UTC 07:59 = 太平洋时间 23:59 (PST)
+  # 已改用 cron-job.org 每天 23:55 PT 触发
+  #schedule:
+  #  - cron: '59 6 * * *'  # 每天 UTC 07:59 = 太平洋时间 23:59 (PST)
   workflow_dispatch:
     inputs:
       date:
