@@ -5,6 +5,8 @@ import time
 from datetime import datetime, timezone
 import pytz
 from config import USERS, CN_USERS
+import json
+import os
 
 DB_FILE = "tracker.db"
 
@@ -215,6 +217,12 @@ def get_recent_ac(username):
     return get_recent_ac_global(username)
 
 
+def get_manual(username, date_str):
+    if not os.path.exists("manual.json"):
+        return []
+    with open("manual.json") as f:
+        return json.load(f).get(username, {}).get(date_str, [])
+        
 # ---------------- 统计当天 ----------------
 
 def check_for_date(username, target_date):
@@ -239,6 +247,10 @@ def check_for_date(username, target_date):
         number = get_question_number(title, title_slug)
         time.sleep(0.5)  # 避免请求太快
         problems.append(f"{number}. {title}")
+
+    for p in get_manual(username, target_date.isoformat()):
+        if p not in problems:
+            problems.append(p)
 
     problems.sort(key=lambda x: int(x.split(".")[0]) if x.split(".")[0].isdigit() else 9999)
 
