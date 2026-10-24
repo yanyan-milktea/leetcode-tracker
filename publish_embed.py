@@ -157,7 +157,7 @@ def build_embed():
 
         medal = medals[display_rank - 1] if display_rank <= 3 else ""
 
-        streak = get_streak(username)
+        streak = get_streak(username) if count > 0 else 1
 
         # ---------- rank change ----------
         change = ""
